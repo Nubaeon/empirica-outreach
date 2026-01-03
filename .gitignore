@@ -1,0 +1,118 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets
+.env
+*.key
+*.pem
+credentials.json
+secrets.yaml
+
+# Databases (local data)
+*.db
+*.sqlite
+*.sqlite3
+.qdrant_data/
+
+# Empirica
+.empirica_reflex_logs/
+.empirica/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+/tmp/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Personal data
+workspace/
+
+# Planning/session docs (keep local, not for GitHub)
+*ANALYSIS*.md
+*PLAN*.md
+*STRATEGY*.md
+*COMPLETE*.md
+*SUMMARY*.md
+*AUDIT*.md
+*INVESTIGATION*.md
+*DECISION*.md
+*EXTRACTION*.md
+*KICKOFF*.md
+*PROGRESS*.md
+*STATUS*.md
+*VISION*.md
+*OPPORTUNITY*.md
+*DRAFT*.md
+*RESPONSE*.md
+*ASSESSMENT*.md
+*INVENTORY*.md
+REDDIT_APPLICATION*.md
+REDDIT_FORM*.txt
+REDDIT_POLICY*.md
+REPO_CLEANUP*.md
+
+# Empirica session JSON
+*.json
+!pyproject.json
+!package.json
+
+# Other platforms (not Reddit's business)
+twitter/
+discord/
+hackernews/
+linkedin/
+devto/
+github/
+newsletter/
+assets/
+reddit/
+research/
+tests/
+spec/
+
+# PDFs
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# Test scripts
+test_*.sh
+test_*.py

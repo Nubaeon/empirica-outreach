@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empirica Outreach Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .epistemic-badge {
+            font-size: 0.85em;
+            margin-left: 0.5em;
+        }
+        .confidence-high { background-color: #28a745; }
+        .confidence-medium { background-color: #ffc107; color: #000; }
+        .confidence-low { background-color: #dc3545; }
+        .opportunity-card {
+            margin-bottom: 1em;
+            border-left: 4px solid #007bff;
+        }
+        .draft-card {
+            margin-bottom: 1em;
+            border-left: 4px solid #28a745;
+        }
+        .draft-pending { border-left-color: #ffc107; }
+        .draft-rejected { border-left-color: #dc3545; }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5em;
+            border-radius: 0.5em;
+            margin-bottom: 1em;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">🚀 Empirica Outreach</span>
+            <button class="btn btn-outline-light btn-sm" onclick="refreshAll()">
+                🔄 Refresh
+            </button>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Stats Row -->
+        <div class="row" id="stats-row">
+            <div class="col-md-4">
+                <div class="stats-card">
+                    <h5>Channels</h5>
+                    <h2 id="stat-channels">-</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stats-card">
+                    <h5>Opportunities</h5>
+                    <h2 id="stat-opportunities">-</h2>
+                    <small id="stat-opportunities-new">- new</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stats-card">
+                    <h5>Drafts</h5>
+                    <h2 id="stat-drafts">-</h2>
+                    <small id="stat-drafts-pending">- pending</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mt-4" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="opportunities-tab" data-bs-toggle="tab" 
+                        data-bs-target="#opportunities" type="button" role="tab">
+                    📡 Opportunities
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="drafts-tab" data-bs-toggle="tab" 
+                        data-bs-target="#drafts" type="button" role="tab">
+                    ✏️ Drafts
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="scout-tab" data-bs-toggle="tab" 
+                        data-bs-target="#scout" type="button" role="tab">
+                    🔍 Run Scout
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="mainTabContent">
+            <!-- Opportunities Tab -->
+            <div class="tab-pane fade show active" id="opportunities" role="tabpanel">
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4>Detected Opportunities</h4>
+                        <select class="form-select form-select-sm" style="width: 200px;" 
+                                id="opp-filter" onchange="loadOpportunities()">
+                            <option value="">All Status</option>
+                            <option value="new" selected>New</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="engaged">Engaged</option>
+                            <option value="skipped">Skipped</option>
+                        </select>
+                    </div>
+                    <div id="opportunities-list"></div>
+                </div>
+            </div>
+
+            <!-- Drafts Tab -->
+            <div class="tab-pane fade" id="drafts" role="tabpanel">
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4>Draft Responses</h4>
+                        <select class="form-select form-select-sm" style="width: 200px;" 
+                                id="draft-filter" onchange="loadDrafts()">
+                            <option value="pending_review" selected>Pending Review</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="posted">Posted</option>
+                        </select>
+                    </div>
+                    <div id="drafts-list"></div>
+                </div>
+            </div>
+
+            <!-- Scout Tab -->
+            <div class="tab-pane fade" id="scout" role="tabpanel">
+                <div class="mt-3">
+                    <h4>Run Scout Agent</h4>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Select Channel</label>
+                                <select class="form-select" id="scout-channel"></select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Posts to Scan</label>
+                                <input type="number" class="form-control" id="scout-limit" value="100">
+                            </div>
+                            <button class="btn btn-primary" onclick="runScout()">
+                                🔍 Run Scout
+                            </button>
+                        </div>
+                    </div>
+                    <div id="scout-results" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Draft Review -->
+    <div class="modal fade" id="draftModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Review Draft</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="draft-modal-body"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-danger" onclick="rejectCurrentDraft()">Reject</button>
+                    <button type="button" class="btn btn-success" onclick="approveCurrentDraft()">Approve</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE = '/api/v1/outreach';
+        let currentDraftId = null;
+
+        // Load stats
+        async function loadStats() {
+            const res = await fetch(`${API_BASE}/stats`);
+            const data = await res.json();
+            if (data.ok) {
+                document.getElementById('stat-channels').textContent = data.stats.channels;
+                document.getElementById('stat-opportunities').textContent = data.stats.opportunities.total;
+                document.getElementById('stat-opportunities-new').textContent = `${data.stats.opportunities.new} new`;
+                document.getElementById('stat-drafts').textContent = data.stats.drafts.total;
+                document.getElementById('stat-drafts-pending').textContent = `${data.stats.drafts.pending_review} pending`;
+            }
+        }
+
+        // Load opportunities
+        async function loadOpportunities() {
+            const status = document.getElementById('opp-filter').value;
+            const params = new URLSearchParams();
+            if (status) params.append('status', status);
+            
+            const res = await fetch(`${API_BASE}/opportunities?${params}`);
+            const data = await res.json();
+            
+            const container = document.getElementById('opportunities-list');
+            if (data.ok && data.opportunities.length > 0) {
+                container.innerHTML = data.opportunities.map(opp => `
+                    <div class="card opportunity-card">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                ${opp.type}
+                                <span class="badge ${getConfidenceBadge(opp.confidence_to_engage)} epistemic-badge">
+                                    Confidence: ${(opp.confidence_to_engage * 100).toFixed(0)}%
+                                </span>
+                            </h6>
+                            <p class="card-text text-muted small">${opp.detected_at}</p>
+                            <p class="card-text">${opp.context.substring(0, 200)}...</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-secondary">${opp.recommended_action}</span>
+                                <a href="${opp.source_url}" target="_blank" class="btn btn-sm btn-outline-primary">View Source</a>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p class="text-muted">No opportunities found.</p>';
+            }
+        }
+
+        // Load drafts
+        async function loadDrafts() {
+            const status = document.getElementById('draft-filter').value;
+            const params = new URLSearchParams({ status });
+            
+            const res = await fetch(`${API_BASE}/drafts?${params}`);
+            const data = await res.json();
+            
+            const container = document.getElementById('drafts-list');
+            if (data.ok && data.drafts.length > 0) {
+                container.innerHTML = data.drafts.map(draft => `
+                    <div class="card draft-card ${draft.status !== 'pending_review' ? 'draft-' + draft.status.split('_')[0] : ''}">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                Draft for ${draft.opportunity_id}
+                                <span class="badge ${getConfidenceBadge(draft.confidence_score)} epistemic-badge">
+                                    Confidence: ${(draft.confidence_score * 100).toFixed(0)}%
+                                </span>
+                            </h6>
+                            <p class="card-text">${draft.body.substring(0, 300)}...</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-info">${draft.status}</span>
+                                <button class="btn btn-sm btn-primary" onclick="reviewDraft('${draft.id}')">
+                                    Review
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = '<p class="text-muted">No drafts found.</p>';
+            }
+        }
+
+        // Load channels for scout
+        async function loadChannels() {
+            const res = await fetch(`${API_BASE}/channels`);
+            const data = await res.json();
+            
+            const select = document.getElementById('scout-channel');
+            if (data.ok) {
+                select.innerHTML = data.channels.map(ch => 
+                    `<option value="${ch.id}">${ch.name} (${ch.platform})</option>`
+                ).join('');
+            }
+        }
+
+        // Run scout
+        async function runScout() {
+            const channelId = document.getElementById('scout-channel').value;
+            const limit = document.getElementById('scout-limit').value;
+            
+            document.getElementById('scout-results').innerHTML = '<p class="text-info">Running Scout...</p>';
+            
+            const res = await fetch(`${API_BASE}/scout/run`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel_id: channelId, limit: parseInt(limit) })
+            });
+            const data = await res.json();
+            
+            if (data.ok) {
+                document.getElementById('scout-results').innerHTML = `
+                    <div class="alert alert-success">
+                        ✅ Scout Complete!<br>
+                        Scanned: ${data.posts_scanned} posts<br>
+                        Detected: ${data.opportunities_detected} opportunities
+                    </div>
+                `;
+                loadStats();
+                loadOpportunities();
+            } else {
+                document.getElementById('scout-results').innerHTML = `
+                    <div class="alert alert-danger">❌ Error: ${data.message}</div>
+                `;
+            }
+        }
+
+        // Review draft in modal
+        async function reviewDraft(draftId) {
+            const res = await fetch(`${API_BASE}/drafts/${draftId}`);
+            const data = await res.json();
+            
+            if (data.ok) {
+                currentDraftId = draftId;
+                const draft = data.draft;
+                
+                document.getElementById('draft-modal-body').innerHTML = `
+                    <div class="mb-3">
+                        <h6>Confidence: ${(draft.confidence_score * 100).toFixed(0)}%</h6>
+                        <h6>Predicted Engagement: ${(draft.predicted_engagement * 100).toFixed(0)}%</h6>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Draft Body:</label>
+                        <textarea class="form-control" id="draft-edit-body" rows="8">${draft.body}</textarea>
+                    </div>
+                    ${draft.uncertainty_flags && draft.uncertainty_flags.length > 0 ? `
+                        <div class="alert alert-warning">
+                            <strong>⚠️ Uncertainty Flags:</strong>
+                            <ul>${draft.uncertainty_flags.map(f => `<li>${f}</li>`).join('')}</ul>
+                        </div>
+                    ` : ''}
+                `;
+                
+                new bootstrap.Modal(document.getElementById('draftModal')).show();
+            }
+        }
+
+        // Approve draft
+        async function approveCurrentDraft() {
+            const res = await fetch(`${API_BASE}/drafts/${currentDraftId}/approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ feedback: 'Approved from dashboard' })
+            });
+            
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('draftModal')).hide();
+                loadDrafts();
+                loadStats();
+                alert('✅ Draft approved!');
+            }
+        }
+
+        // Reject draft
+        async function rejectCurrentDraft() {
+            const feedback = prompt('Rejection reason:');
+            if (!feedback) return;
+            
+            const res = await fetch(`${API_BASE}/drafts/${currentDraftId}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ feedback })
+            });
+            
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('draftModal')).hide();
+                loadDrafts();
+                loadStats();
+                alert('✅ Draft rejected');
+            }
+        }
+
+        // Helper: confidence badge class
+        function getConfidenceBadge(score) {
+            if (score >= 0.7) return 'confidence-high';
+            if (score >= 0.4) return 'confidence-medium';
+            return 'confidence-low';
+        }
+
+        // Refresh all
+        function refreshAll() {
+            loadStats();
+            loadOpportunities();
+            loadDrafts();
+            loadChannels();
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshAll();
+            setInterval(loadStats, 30000); // Refresh stats every 30s
+        });
+    </script>
+</body>
+</html>
