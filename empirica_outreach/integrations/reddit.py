@@ -2,19 +2,63 @@
 
 from typing import List, Dict, Optional
 from datetime import datetime
+import time
+import random
+import threading
 import praw
 from praw.models import Submission, Comment
+
+
+class RedditRateLimiter:
+    """
+    Token bucket rate limiter for Reddit API.
+    
+    Smoothly distributes requests to avoid bursting and rate limit hits.
+    Adds human-like delays between requests.
+    """
+    
+    def __init__(self, max_per_minute: int = 55):
+        """
+        Initialize rate limiter.
+        
+        Args:
+            max_per_minute: Max requests per minute (default 55, leaving 5 buffer from Reddit's 60)
+        """
+        self.max_per_minute = max_per_minute
+        self.requests = []
+        self.lock = threading.Lock()
+    
+    def wait_if_needed(self):
+        """Block if rate limit would be exceeded, add human-like delay"""
+        with self.lock:
+            now = time.time()
+            
+            # Remove requests older than 1 minute
+            self.requests = [t for t in self.requests if now - t < 60]
+            
+            if len(self.requests) >= self.max_per_minute:
+                # Wait until oldest request is 60s old
+                sleep_time = 60 - (now - self.requests[0]) + 0.1
+                time.sleep(sleep_time)
+                return self.wait_if_needed()
+            
+            # Add human-like delay (1-2 seconds)
+            # Makes requests indistinguishable from human browsing
+            time.sleep(random.uniform(1.0, 2.0))
+            
+            self.requests.append(now)
 
 
 class RedditClient:
     """
     Reddit API client wrapper.
     
-    Uses PRAW for read-only operations in Phase 1.
-    Provides subreddit monitoring for Scout agent.
+    Supports both read-only (Phase 1) and authenticated posting (Phase 2).
+    Includes rate limiting and human-like delays.
     """
     
-    def __init__(self, client_id: str, client_secret: str, user_agent: str):
+    def __init__(self, client_id: str, client_secret: str, user_agent: str,
+                 username: Optional[str] = None, password: Optional[str] = None):
         """
         Initialize Reddit client.
         
@@ -22,15 +66,33 @@ class RedditClient:
             client_id: Reddit API client ID
             client_secret: Reddit API client secret
             user_agent: User agent string (e.g., "empirica-outreach/0.1.0")
+            username: Reddit username (optional, for posting)
+            password: Reddit password (optional, for posting)
         """
-        self.reddit = praw.Reddit(
-            client_id=client_id,
-            client_secret=client_secret,
-            user_agent=user_agent,
-            # Read-only mode (no username/password needed)
-            check_for_async=False
-        )
-        self.reddit.read_only = True
+        # Initialize rate limiter
+        self.rate_limiter = RedditRateLimiter(max_per_minute=55)
+        
+        # Configure PRAW
+        praw_config = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "user_agent": user_agent,
+            "check_for_async": False
+        }
+        
+        # Add auth if provided (for posting)
+        if username and password:
+            praw_config["username"] = username
+            praw_config["password"] = password
+            self.authenticated = True
+        else:
+            self.authenticated = False
+        
+        self.reddit = praw.Reddit(**praw_config)
+        
+        # Set read-only if not authenticated
+        if not self.authenticated:
+            self.reddit.read_only = True
     
     def get_recent_posts(self, subreddit_name: str, limit: int = 100,
                         time_filter: str = "day") -> List[Dict]:
@@ -45,6 +107,8 @@ class RedditClient:
         Returns:
             List of post dictionaries
         """
+        self.rate_limiter.wait_if_needed()  # Rate limit + human-like delay
+        
         subreddit = self.reddit.subreddit(subreddit_name)
         posts = []
         
@@ -56,6 +120,8 @@ class RedditClient:
     
     def get_hot_posts(self, subreddit_name: str, limit: int = 50) -> List[Dict]:
         """Get hot posts from subreddit"""
+        self.rate_limiter.wait_if_needed()
+        
         subreddit = self.reddit.subreddit(subreddit_name)
         posts = []
         
@@ -79,6 +145,8 @@ class RedditClient:
         Returns:
             List of matching posts
         """
+        self.rate_limiter.wait_if_needed()
+        
         subreddit = self.reddit.subreddit(subreddit_name)
         posts = []
         
@@ -99,6 +167,8 @@ class RedditClient:
         Returns:
             List of comment dictionaries
         """
+        self.rate_limiter.wait_if_needed()
+        
         submission = self.reddit.submission(url=post_url)
         submission.comments.replace_more(limit=0)  # Don't fetch "more comments"
         
@@ -108,6 +178,30 @@ class RedditClient:
                 comments.append(self._comment_to_dict(comment))
         
         return comments
+    
+    def submit_comment(self, post_url: str, comment_text: str) -> Dict:
+        """
+        Submit a comment on a post (requires authentication).
+        
+        Args:
+            post_url: Reddit post URL
+            comment_text: Comment content
+            
+        Returns:
+            Comment details
+            
+        Raises:
+            PermissionError: If not authenticated
+        """
+        if not self.authenticated:
+            raise PermissionError("Authentication required for posting. Set username/password.")
+        
+        self.rate_limiter.wait_if_needed()
+        
+        submission = self.reddit.submission(url=post_url)
+        comment = submission.reply(comment_text)
+        
+        return self._comment_to_dict(comment)
     
     def _submission_to_dict(self, submission: Submission) -> Dict:
         """Convert PRAW submission to dictionary"""
@@ -148,19 +242,24 @@ class RedditClient:
             REDDIT_CLIENT_ID
             REDDIT_CLIENT_SECRET
             REDDIT_USER_AGENT
+        Optional (for posting):
+            REDDIT_USERNAME
+            REDDIT_PASSWORD
         """
         import os
         
         client_id = os.getenv("REDDIT_CLIENT_ID")
         client_secret = os.getenv("REDDIT_CLIENT_SECRET")
         user_agent = os.getenv("REDDIT_USER_AGENT", "empirica-outreach/0.1.0")
+        username = os.getenv("REDDIT_USERNAME")
+        password = os.getenv("REDDIT_PASSWORD")
         
         if not client_id or not client_secret:
             raise ValueError(
                 "Missing Reddit credentials. Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET"
             )
         
-        return cls(client_id, client_secret, user_agent)
+        return cls(client_id, client_secret, user_agent, username, password)
 
 
 class RedditMonitor:
